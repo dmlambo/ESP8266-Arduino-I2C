@@ -311,6 +311,8 @@ bool Twi::write_stop(void)
 bool Twi::write_bit(bool bit)
 {
     SCL_LOW(twi_scl);
+    // We should very clearly distinguish our SCL and SDA signals
+    busywait(twi_dcount / 2);
     if (bit)
     {
         SDA_HIGH(twi_sda);
@@ -319,7 +321,7 @@ bool Twi::write_bit(bool bit)
     {
         SDA_LOW(twi_sda);
     }
-    busywait(twi_dcount + 1);
+    busywait(twi_dcount / 2 + 1);
     SCL_HIGH(twi_scl);
     WAIT_CLOCK_STRETCH();
     busywait(twi_dcount);
@@ -329,8 +331,9 @@ bool Twi::write_bit(bool bit)
 bool Twi::read_bit(void)
 {
     SCL_LOW(twi_scl);
+    busywait(twi_dcount / 2);
     SDA_HIGH(twi_sda);
-    busywait(twi_dcount + 2);
+    busywait(twi_dcount / 2);
     SCL_HIGH(twi_scl);
     WAIT_CLOCK_STRETCH();
     bool bit = SDA_READ(twi_sda);
@@ -948,11 +951,13 @@ void IRAM_ATTR Twi::onSdaChange(void)
             if (sda)
             {
                 // STOP
-                SCL_LOW(twi.twi_scl);  // generates a low SCL pulse after STOP
+                // No. No. No. Outside a couple very specific cases, we should not be 
+                // touching SCL as a slave.
+                //SCL_LOW(twi.twi_scl);  // generates a low SCL pulse after STOP
                 ets_timer_disarm(&twi.timer);
                 twi.twip_state = TWIP_IDLE;
                 twi.twip_mode  = TWIPM_IDLE;
-                SCL_HIGH(twi.twi_scl);
+                //SCL_HIGH(twi.twi_scl);
             }
             else
             {
@@ -982,7 +987,6 @@ void IRAM_ATTR Twi::onSdaChange(void)
             else
             {
                 // during first bit in byte transfer - ok
-                SCL_LOW(twi.twi_scl);  // clock stretching
                 twi.onTwipEvent(TW_SR_STOP);
                 if (sda)
                 {
@@ -994,6 +998,7 @@ void IRAM_ATTR Twi::onSdaChange(void)
                 else
                 {
                     // START
+                    SCL_LOW(twi.twi_scl);  // clock stretching
                     twi.bitCount = 8;
                     ets_timer_arm_new(&twi.timer, twi.twi_timeout_ms, false, true);  // Once, ms
                     twi.twip_state = TWIP_REP_START;
