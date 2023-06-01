@@ -757,13 +757,15 @@ void IRAM_ATTR Twi::onSclChange(void)
         {
             if (twi.twip_mode == TWIPM_IDLE)
             {
-                if ((twi.twi_data & 0xFE) != twi.twi_addr)
+                uint8_t addr = twi.twi_data & 0xFE;
+                bool read = twi.twi_data & 0x01;
+                if (addr == twi.twi_addr || (!addr && !read)) // GCALL
                 {
-                    // ignore
+                    SDA_LOW(twi.twi_sda); // ACK
                 }
                 else
                 {
-                    SDA_LOW(twi.twi_sda);
+                    // ignore
                 }
             }
             else
@@ -790,19 +792,16 @@ void IRAM_ATTR Twi::onSclChange(void)
         {
             if (twi.twip_mode == TWIPM_IDLE)
             {
-                if ((twi.twi_data & 0xFE) != twi.twi_addr)
-                {
-                    SDA_HIGH(twi.twi_sda);
-                    twi.twip_state = TWIP_WAIT_STOP;
-                }
-                else
+                uint8_t addr = twi.twi_data & 0xFE;
+                bool read = twi.twi_data & 0x01;
+                if (addr == twi.twi_addr || (!addr && !read))
                 {
                     SCL_LOW(twi.twi_scl);  // clock stretching
                     SDA_HIGH(twi.twi_sda);
                     twi.twip_mode = TWIPM_ADDRESSED;
-                    if (!(twi.twi_data & 0x01))
+                    if (!read)
                     {
-                        twi.onTwipEvent(TW_SR_SLA_ACK);
+                        twi.onTwipEvent(addr ? TW_SR_SLA_ACK : TW_SR_GCALL_ACK);
                         twi.bitCount   = 8;
                         twi.twip_state = TWIP_SLA_W;
                     }
@@ -811,6 +810,9 @@ void IRAM_ATTR Twi::onSclChange(void)
                         twi.onTwipEvent(TW_ST_SLA_ACK);
                         twi.twip_state = TWIP_SLA_R;
                     }
+                } else {
+                    SDA_HIGH(twi.twi_sda);
+                    twi.twip_state = TWIP_WAIT_STOP;
                 }
             }
             else
